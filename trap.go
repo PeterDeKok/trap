@@ -1,0 +1,5 @@
+package trap
+
+func init() {
+    
+}
