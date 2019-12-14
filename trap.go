@@ -1,3 +1,6 @@
+// Package trap provides the option to perform graceful shutdown actions
+// These actions can be triggered by a signal from the OS,
+// a panic in the main go routine, or by simply terminating normally.
 package trap
 
 import (
@@ -20,6 +23,7 @@ var (
 	ch      chan os.Signal
 )
 
+// init initializes the callback list(s) and starts the signal listener
 func init() {
 	cbsList = make(map[os.Signal]*list.List)
 	ch = make(chan os.Signal, 3)
@@ -43,6 +47,9 @@ func init() {
 	}()
 }
 
+// processSignal will execute all callbacks for the given signal
+// To ensure the 'kill callbacks' are not triggered twice,
+// the list of these callbacks will be truncated
 func processSignal(s os.Signal) {
 	mux.Lock()
 	defer mux.Unlock()
@@ -74,8 +81,8 @@ func processSignal(s os.Signal) {
 	}
 }
 
-// Deferrer should be called when the go routing terminates,
-// as part of the deferred functions, for normal signal termination, normal termination AND panics.
+// Deferrer should be called when the (main) go routing terminates,
+// as part of the deferred functions, for signal termination, normal termination AND panics.
 // This will ensure any caught signals won't be written to a closed channel.
 func Deferrer() {
 	if err := recover(); err != nil {
@@ -97,10 +104,13 @@ func Deferrer() {
 	wait.Wait()
 }
 
+// OnReload will process the callback on receiving a SIGUSR1 signal
 func OnReload(cb Callback) CallbackRemover {
 	return OnSignal(syscall.SIGUSR1, cb)
 }
 
+// OnKill will process the callback on receiving a SIGKILL, SIGQUIT or SIGINT signal
+// A normal, or panic termination will result in a SIGINT, therefor triggering these callbacks
 func OnKill(cb Callback) CallbackRemover {
 	var rfns []func()
 
@@ -115,6 +125,8 @@ func OnKill(cb Callback) CallbackRemover {
 	}
 }
 
+// OnSignal is used internally to register the callbacks for some predefined signals
+// This can however also be used in the consuming package or application to register any other signal callbacks
 func OnSignal(sig os.Signal, cb Callback) CallbackRemover {
 	mux.Lock()
 	defer mux.Unlock()
